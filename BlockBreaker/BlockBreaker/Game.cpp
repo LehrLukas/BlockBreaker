@@ -1,11 +1,10 @@
 #include "Game.h"
 #include "Windows.h"
+#include <chrono>
 
-
-Game::Game()
+Game::Game() :windowWidth(640), windowHeight(480), close(false), tickPerSecond(25), maxFrameLoss(5)
 {
 }
-
 
 Game::~Game()
 {
@@ -14,21 +13,61 @@ Game::~Game()
 int Game::Run()
 {
 	CreateMainWindow();
-	while (true)
+	using std::chrono::high_resolution_clock;
+	auto previous = high_resolution_clock::now();
+	auto lag = previous - previous;
+	auto nanoPerUpdate = std::chrono::nanoseconds(1000000000 / tickPerSecond);
+	while (!close)
 	{
+		auto current = high_resolution_clock::now();
+		auto elapsed = current - previous;
+		previous = current;
+		lag += elapsed;
+		ProcessInput();
+		while (lag >= nanoPerUpdate)
+		{
+			Update();
+			lag -= nanoPerUpdate;
+		}
+		float interpolation = float(lag.count()) / float(nanoPerUpdate.count());
+		Render(interpolation);
+
+		/*int loops = 0;
+		while (time.now() > nextTickTime && loops < maxFrameLoss)
+		{
+			Update();
+			nextTickTime += milliSecondPerTick;
+			loops++;
+		}
+		float interpolation = float(time.now() + milliSecondPerTick - nextTickTime) / float(milliSecondPerTick);
+		Display(interpolation);*/
 
 	}
+
 	return 0;
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	switch (message)
+	{
+	case WM_PAINT:
+	{
+		PAINTSTRUCT ps;
+		BeginPaint(hWnd, &ps);
+		EndPaint(hWnd, &ps);
+	}
+	return 0;
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
 bool Game::CreateMainWindow()
 {
-	const char* ClassName = "BlockBreaker";
+	const wchar_t* ClassName = L"BlockBreaker";
 	HINSTANCE hInstance = GetModuleHandle(0);
 
 	WNDCLASSEX wcex;
@@ -55,8 +94,8 @@ bool Game::CreateMainWindow()
 	RECT clientSize;
 	clientSize.top = 0;
 	clientSize.left = 0;
-	clientSize.right = 640;
-	clientSize.bottom = 480;
+	clientSize.right = windowWidth;
+	clientSize.bottom = windowHeight;
 
 	DWORD style = WS_POPUP;
 
@@ -96,6 +135,32 @@ bool Game::CreateMainWindow()
 
 	// fix ugly ATI driver bugs. Thanks to ariaci
 	MoveWindow(HWnd, windowLeft, windowTop, realWidth, realHeight, TRUE);
+
+	SetActiveWindow(HWnd);
+	SetForegroundWindow(HWnd);
 	return false;
+}
+
+void Game::ProcessInput()
+{
+	MSG msg;
+
+	while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+	{
+		// No message translation because we don't use WM_CHAR and it would conflict with our
+		// deadkey handling.
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+		if (msg.message == WM_QUIT)
+			close = true;
+	}
+}
+
+void Game::Update()
+{
+}
+
+void Game::Render(float interpolation)
+{
 }
 
